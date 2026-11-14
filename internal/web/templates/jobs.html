@@ -1,0 +1,43 @@
+{{define "toolbar"}}
+{{$d := .Data}}
+<form class="filters" method="get" action="/i/{{$d.Inst}}/ns/{{$d.NS}}/jobs">
+  <label>Queue <input name="queue" value="{{$d.Filter.Queue}}" maxlength="200"></label>
+  <label>Kind <input name="kind" value="{{$d.Filter.Kind}}" maxlength="200"></label>
+  <label>Group <input name="group" value="{{$d.Filter.Group}}" maxlength="200"></label>
+  <label>State
+    <select name="state">
+      <option value="">any</option>
+      {{range $d.States}}<option value="{{.}}"{{if eq . $d.Filter.State}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <button type="submit">Filter</button>
+  <a href="/i/{{$d.Inst}}/ns/{{$d.NS}}/jobs">Clear</a>
+</form>
+{{end}}
+
+{{define "content"}}
+{{$d := .Data}}
+{{$base := printf "/i/%s/ns/%s" $d.Inst $d.NS}}
+<div class="scroll">
+<table>
+  <thead><tr><th>ID</th><th>Queue</th><th>Kind</th><th>State</th><th>Group</th><th>Pool</th><th class="num">Attempt</th><th>Created</th><th>Updated</th></tr></thead>
+  <tbody>
+  {{range $d.Page.Items}}
+  <tr>
+    <td><a href="{{$base}}/jobs/{{.ID}}"><code>{{.ID}}</code></a></td>
+    <td>{{.Queue}}</td><td>{{.Kind}}</td><td>{{template "state" .State}}</td>
+    <td>{{.Group}}</td><td>{{.Pool}}</td>
+    <td class="num">{{.Attempt}}/{{.MaxAttempts}}</td>
+    <td>{{ago .CreatedAt}}</td><td>{{ago .UpdatedAt}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="9" class="muted">No jobs match.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p class="pager">
+  {{if $d.Filter.Cursor}}<a href="{{$base}}/jobs?queue={{$d.Filter.Queue}}&kind={{$d.Filter.Kind}}&group={{$d.Filter.Group}}&state={{$d.Filter.State}}">First page</a>{{end}}
+  {{with $d.Page.Next}}<a href="{{$base}}/jobs?queue={{$d.Filter.Queue}}&kind={{$d.Filter.Kind}}&group={{$d.Filter.Group}}&state={{$d.Filter.State}}&cursor={{.}}">Next page</a>{{end}}
+</p>
+{{end}}

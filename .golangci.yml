@@ -1,0 +1,63 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - containedctx
+    - copyloopvar
+    - dupl
+    - errcheck
+    - errorlint
+    - gocognit
+    - gocritic
+    - govet
+    - ineffassign
+    - misspell
+    - nolintlint
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    dupl:
+      threshold: 150
+    gocognit:
+      min-complexity: 30
+    revive:
+      rules:
+        - name: file-length-limit
+          arguments:
+            - max: 400
+              skipComments: true
+              skipBlankLines: true
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: unreachable-code
+        - name: var-naming
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [dupl, gocognit, errcheck]
+      - path: store/storetest/
+        linters: [dupl, gocognit, containedctx]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

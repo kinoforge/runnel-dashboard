@@ -1,0 +1,17 @@
+{{define "content"}}
+<h1>Instances</h1>
+<div class="cards">
+  {{range .Data}}
+  <article class="card">
+    <header>
+      <a href="/i/{{.Name}}"><h2>{{.Name}}</h2></a>
+      {{if .Ready}}<span class="pill ok">ready</span>{{else}}<span class="pill bad">down</span>{{end}}
+    </header>
+    {{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+    {{with .Note}}<p class="muted">{{.}}</p>{{end}}
+    {{template "sysbars" .System}}
+    {{if .System}}<p class="muted">{{.Namespaces}} namespaces · {{.System.Goroutines}} goroutines · {{.System.CPUs}} CPUs</p>{{end}}
+  </article>
+  {{end}}
+</div>
+{{end}}

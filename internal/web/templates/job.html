@@ -1,0 +1,42 @@
+{{define "content"}}
+{{$d := .Data}}
+{{$j := $d.Job}}
+{{$url := printf "/i/%s/ns/%s/jobs/%s" $d.Inst $d.NS $j.ID}}
+<h1><code>{{$j.ID}}</code> {{template "state" $j.State}}</h1>
+<p class="actions">
+  {{if not $j.Final}}<button class="warn" hx-post="{{$url}}/cancel" hx-target="#flash" hx-confirm="Cancel job {{$j.ID}}?">Cancel</button>{{end}}
+  {{if or (eq $j.State "dead") (eq $j.State "cancelled") (eq $j.State "expired")}}<button hx-post="{{$url}}/retry" hx-target="#flash" hx-confirm="Retry job {{$j.ID}}?">Retry</button>{{end}}
+</p>
+<section class="card">
+<table class="kv">
+  <tr><th>Queue</th><td>{{$j.Queue}}</td></tr>
+  <tr><th>Kind</th><td>{{$j.Kind}}</td></tr>
+  <tr><th>Priority</th><td>{{$j.Priority}}</td></tr>
+  {{if $j.Group}}<tr><th>Group</th><td>{{$j.Group}}</td></tr>{{end}}
+  {{if $j.Pool}}<tr><th>Pool</th><td>{{$j.Pool}}</td></tr>{{end}}
+  <tr><th>Attempt</th><td>{{$j.Attempt}} of {{$j.MaxAttempts}}</td></tr>
+  {{if $j.Worker}}<tr><th>Worker</th><td><code>{{$j.Worker}}</code>, lease until {{when $j.LeaseUntil}}</td></tr>{{end}}
+  {{if $j.UniqueKey}}<tr><th>Unique key</th><td><code>{{$j.UniqueKey}}</code></td></tr>{{end}}
+  {{if $j.DependsOn}}<tr><th>Depends on</th><td>{{range $j.DependsOn}}<a href="/i/{{$d.Inst}}/ns/{{$d.NS}}/jobs/{{.}}"><code>{{.}}</code></a> {{end}}</td></tr>{{end}}
+  {{if $j.CallbackURL}}<tr><th>Callback</th><td><code>{{$j.CallbackURL}}</code></td></tr>{{end}}
+  <tr><th>Run at</th><td>{{when $j.RunAt}}</td></tr>
+  {{if not $j.Deadline.IsZero}}<tr><th>Deadline</th><td>{{when $j.Deadline}}</td></tr>{{end}}
+  <tr><th>Created</th><td>{{when $j.CreatedAt}}</td></tr>
+  <tr><th>Started</th><td>{{when $j.StartedAt}}</td></tr>
+  <tr><th>Finished</th><td>{{when $j.FinishedAt}}</td></tr>
+  <tr><th>Version</th><td>{{$j.Version}}</td></tr>
+</table>
+</section>
+{{if $j.Meta}}<h2>Meta</h2><table class="kv">{{range $k, $v := $j.Meta}}<tr><th>{{$k}}</th><td><code>{{$v}}</code></td></tr>{{end}}</table>{{end}}
+<h2>Payload</h2>
+{{with pretty $j.Payload}}<pre>{{.}}</pre>{{else}}<p class="muted">none</p>{{end}}
+<h2>Result</h2>
+{{with pretty $j.Result}}<pre>{{.}}</pre>{{else}}<p class="muted">none</p>{{end}}
+{{if $j.Errors}}
+<h2>Errors</h2>
+<table>
+  <thead><tr><th class="num">Attempt</th><th>At</th><th>Queue</th><th>Error</th></tr></thead>
+  <tbody>{{range $j.Errors}}<tr><td class="num">{{.Attempt}}</td><td>{{when .At}}</td><td>{{.Queue}}</td><td><pre>{{.Error}}</pre></td></tr>{{end}}</tbody>
+</table>
+{{end}}
+{{end}}

@@ -1,0 +1,34 @@
+{{define "content"}}
+{{$inst := .Data.Card.Name}}
+<h1>{{$inst}} {{if .Data.Card.Ready}}<span class="pill ok">ready</span>{{else}}<span class="pill bad">down</span>{{end}}</h1>
+{{if .Data.Card.Error}}<p class="error">{{.Data.Card.Error}}</p>{{end}}
+{{with .Data.Card.Note}}<p class="muted">{{.}}</p>{{end}}
+<section class="card">
+  {{template "sysbars" .Data.Card.System}}
+  {{with .Data.Card.System}}{{with .Storage}}{{if .Details}}
+  <details>
+    <summary>Storage details</summary>
+    <table class="kv">{{range $k, $v := .Details}}<tr><th>{{$k}}</th><td>{{$v}}</td></tr>{{end}}</table>
+  </details>
+  {{end}}{{end}}{{end}}
+</section>
+<h2>Namespaces</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>Name</th>{{range .Data.States}}<th class="num">{{.}}</th>{{end}}<th>Keys</th><th>Created</th></tr></thead>
+  <tbody>
+  {{range .Data.Namespaces}}
+  {{$row := .}}
+  <tr>
+    <td><a href="/i/{{$inst}}/ns/{{.Name}}">{{.Name}}</a>{{if .Error}} <span class="bad">{{.Error}}</span>{{end}}</td>
+    {{range $.Data.States}}<td class="num">{{count $row.Totals .}}</td>{{end}}
+    <td class="num">{{len .Keys}}</td>
+    <td>{{ago .CreatedAt}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="11" class="muted">No namespaces yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}

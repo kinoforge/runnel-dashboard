@@ -1,0 +1,33 @@
+listen: ":8710"
+public_url: ""
+secure_cookies: true
+tls_cert: ""
+tls_key: ""
+client_ip_header: ""
+session_ttl: 12h
+idle_timeout: 1h
+refresh: 5s
+running_scan_limit: 10000
+page_size: 50
+max_response_bytes: 16777216
+login:
+  max_attempts: 5
+  window: 15m
+http:
+  read_header_timeout: 10s
+  read_timeout: 30s
+  write_timeout: 60s
+  idle_timeout: 2m
+  shutdown_timeout: 15s
+  max_body_bytes: 65536
+users:
+  - name: admin
+    password_hash: "$2a$12$replace.this.with.the.output.of.runnel-dashboard.hash...."
+instances:
+  - name: prod
+    url: https://admin:${RUNNEL_PROD_PASSWORD}@runnel.internal:8700?ca=/etc/runnel-dashboard/ca.pem
+    timeout: 10s
+  - name: staging
+    url: https://runnel-staging:8700?ca=/etc/runnel-dashboard/ca.pem&cert=/etc/runnel-dashboard/dash.pem&key=/etc/runnel-dashboard/dash.key
+  - name: local
+    url: ${RUNNEL_LOCAL_URL}

@@ -1,0 +1,110 @@
+{{define "content"}}
+{{$d := .Data}}
+{{$base := printf "/i/%s/ns/%s" $d.Inst $d.NS}}
+<h1>{{$d.NS}} <a class="button" href="{{$base}}/jobs">Browse jobs</a></h1>
+<nav class="tabs">
+  {{range $t := (list "queues" "pools" "schedules" "events" "keys")}}
+  <a href="{{$base}}?tab={{$t}}"{{if eq $t $d.Tab}} class="on" aria-current="page"{{end}}>{{$t}}</a>
+  {{end}}
+</nav>
+
+{{if eq $d.Tab "queues"}}
+<div class="scroll">
+<table>
+  <thead><tr><th>Queue</th>{{range $d.States}}<th class="num">{{.}}</th>{{end}}<th>Limits</th><th></th></tr></thead>
+  <tbody>
+  {{range $d.Queues}}
+  {{$q := .}}
+  <tr>
+    <td><a href="{{$base}}/jobs?queue={{.Name}}">{{.Name}}</a>{{if and .Config .Config.Paused}} <span class="pill warn">paused</span>{{end}}</td>
+    {{range $d.States}}<td class="num">{{if count $q.Counts .}}<a href="{{$base}}/jobs?queue={{$q.Name}}&state={{.}}">{{count $q.Counts .}}</a>{{else}}0{{end}}</td>{{end}}
+    <td class="small">{{with .Config}}{{if .MaxRunning}}max running {{.MaxRunning}} {{end}}{{if .MaxQueued}}max queued {{.MaxQueued}} {{end}}{{if .Rate}}rate {{.Rate}}/s {{end}}{{if .MaxAttempts}}attempts {{.MaxAttempts}}{{end}}{{else}}<span class="muted">defaults</span>{{end}}</td>
+    <td>{{if .Config}}{{if .Config.Paused}}
+      <button hx-post="{{$base}}/queues/{{.Name}}/resume" hx-target="#flash" hx-confirm="Resume queue {{.Name}}?">Resume</button>
+      {{else}}
+      <button class="warn" hx-post="{{$base}}/queues/{{.Name}}/pause" hx-target="#flash" hx-confirm="Pause queue {{.Name}}? No new jobs will start.">Pause</button>
+      {{end}}{{end}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="11" class="muted">No queues yet.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if eq $d.Tab "pools"}}
+{{if $d.Truncated}}<p class="muted">Many running jobs: slot counts stop at the scan limit, so they are lower bounds.</p>{{end}}
+<div class="scroll">
+<table>
+  <thead><tr><th>Pool</th><th>Slots used</th><th>Per group</th><th>Rate</th><th></th></tr></thead>
+  <tbody>
+  {{range $d.Pools}}
+  <tr>
+    <td>{{.Name}}{{if .Paused}} <span class="pill warn">paused</span>{{end}}{{if not .PausedUntil.IsZero}} <span class="muted">until {{when .PausedUntil}}</span>{{end}}</td>
+    <td>{{if .Slots}}<meter min="0" max="{{.Slots}}" value="{{.Used}}" high="{{.Slots}}"></meter> {{.Used}} / {{.Slots}}{{else}}{{.Used}} running · no cap{{end}}{{if $d.Truncated}}+{{end}}</td>
+    <td>{{if .GroupSlots}}{{.GroupSlots}}{{else}}<span class="muted">—</span>{{end}}</td>
+    <td>{{if .Rate}}{{.Rate}}/s burst {{.Burst}}{{else}}<span class="muted">—</span>{{end}}</td>
+    <td>{{if .Paused}}
+      <button hx-post="{{$base}}/pools/{{.Name}}/resume" hx-target="#flash" hx-confirm="Resume pool {{.Name}}?">Resume</button>
+      {{else}}
+      <button class="warn" hx-post="{{$base}}/pools/{{.Name}}/pause" hx-target="#flash" hx-confirm="Pause pool {{.Name}}? No new jobs in it will start.">Pause</button>
+      {{end}}</td>
+  </tr>
+  {{else}}
+  <tr><td colspan="5" class="muted">No pools set.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if eq $d.Tab "schedules"}}
+<div class="scroll">
+<table>
+  <thead><tr><th>Name</th><th>Spec</th><th>Queue</th><th>Kind</th><th>Pool</th><th>State</th></tr></thead>
+  <tbody>
+  {{range $d.Schedules}}
+  <tr><td>{{.Name}}</td><td><code>{{.Spec}}</code>{{if .Timezone}} <span class="muted">{{.Timezone}}</span>{{end}}</td><td>{{.Queue}}</td><td>{{.Kind}}</td><td>{{.Pool}}</td>
+    <td>{{if .Paused}}<span class="pill warn">paused</span>{{else}}<span class="pill ok">active</span>{{end}}</td></tr>
+  {{else}}
+  <tr><td colspan="6" class="muted">No schedules.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{if eq $d.Tab "events"}}
+<p class="muted">Oldest first. Events are kept until they are pruned.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th class="num">Seq</th><th>At</th><th>Job</th><th>Queue</th><th>Kind</th><th>State</th></tr></thead>
+  <tbody>
+  {{range $d.Events}}
+  <tr><td class="num">{{.Seq}}</td><td>{{when .At}}</td><td><a href="{{$base}}/jobs/{{.JobID}}"><code>{{.JobID}}</code></a></td><td>{{.Queue}}</td><td>{{.Kind}}</td><td>{{template "state" .State}}</td></tr>
+  {{else}}
+  <tr><td colspan="6" class="muted">No events.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p class="pager">{{if $d.After}}<a href="{{$base}}?tab=events">First</a>{{end}} {{with $d.Next}}<a href="{{$base}}?tab=events&after={{.}}">Next</a>{{end}}</p>
+{{end}}
+
+{{if eq $d.Tab "keys"}}
+{{with $d.Info}}
+<p>Callback secret: {{if .HasSecret}}<span class="pill ok">set</span>{{else}}<span class="pill">none</span>{{end}} · created {{when .CreatedAt}}</p>
+<table>
+  <thead><tr><th>ID</th><th>Name</th><th>Roles</th><th>Created</th><th>Expires</th></tr></thead>
+  <tbody>
+  {{range .Keys}}
+  <tr><td><code>{{.ID}}</code></td><td>{{.Name}}</td><td>{{join .Roles ", "}}</td><td>{{when .CreatedAt}}</td><td>{{when .ExpiresAt}}</td></tr>
+  {{else}}
+  <tr><td colspan="5" class="muted">No keys.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}
+{{end}}

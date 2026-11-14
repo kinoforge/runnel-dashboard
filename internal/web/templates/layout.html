@@ -1,0 +1,52 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"historyCacheSize":0,"selfRequestsOnly":true}'>
+<title>{{.Title}} · Runnel</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:,">
+</head>
+<body{{if .CSRF}} hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'{{end}}>
+<header class="top">
+  <a class="brand" href="/">Runnel</a>
+  {{if .Crumbs}}<nav class="crumbs">{{range .Crumbs}}<span>/</span>{{if .URL}}<a href="{{.URL}}">{{.Name}}</a>{{else}}<b>{{.Name}}</b>{{end}}{{end}}</nav>{{end}}
+  {{if .User}}
+  <form class="who" method="post" action="/logout">
+    <span>{{.User}}</span>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit" class="link">Sign out</button>
+  </form>
+  {{end}}
+</header>
+<div id="flash" aria-live="polite"></div>
+{{block "toolbar" .}}{{end}}
+<main id="live"{{if .Live}} class="poll" hx-get="{{.Self}}" hx-trigger="every {{.Refresh}}" hx-select="#live" hx-swap="outerHTML"{{end}}>
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{block "content" .}}{{end}}
+</main>
+<script src="/static/htmx.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>{{end}}
+
+{{define "sysbars"}}
+{{with .}}
+<dl class="bars">
+  <dt>Memory</dt>
+  <dd>
+    {{if .Memory.Cap}}<meter min="0" max="{{.Memory.Cap}}" value="{{.Memory.Total}}"></meter>{{end}}
+    <span>{{bytes .Memory.Total}}{{if .Memory.Cap}} of {{bytes .Memory.Cap}} ({{pct .Memory.Total .Memory.Cap}}%){{end}}</span>
+  </dd>
+  <dt>Heap</dt>
+  <dd><span>{{bytes .Memory.Heap}}, next GC at {{bytes .Memory.NextGC}}</span></dd>
+  <dt>Storage</dt>
+  <dd>{{if .Storage}}<span>{{bytes .Storage.Bytes}} · {{.Storage.Kind}}</span>{{else if .StorageError}}<span class="bad">{{.StorageError}}</span>{{else}}<span class="muted">not reported</span>{{end}}</dd>
+  <dt>Version</dt>
+  <dd><span>{{.Version}} · {{.GoVersion}} · up {{uptime .StartedAt}}</span></dd>
+</dl>
+{{end}}
+{{end}}
+
+{{define "state"}}<span class="state s-{{.}}">{{.}}</span>{{end}}
