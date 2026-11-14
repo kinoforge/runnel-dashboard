@@ -1,0 +1,7 @@
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/runnel-dashboard /runnel-dashboard
+USER nonroot
+EXPOSE 8710
+ENTRYPOINT ["/runnel-dashboard"]
+CMD ["serve", "-config", "/etc/runnel-dashboard/dashboard.yaml"]
