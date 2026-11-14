@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.0.3-beta.2] - 2026-11-14
+
 ### Added
 
 - Settings pages for queues and pools: start rate, burst, and pause a pool for a while. Saving sends a merge patch with `If-Match`, so a newer change is never overwritten.
@@ -24,5 +26,6 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - Each Runnel instance is one connection URL, such as `https://admin:${PASSWORD}@host:8700?ca=ca.pem`, with optional client certificates.
 - Images at `ghcr.io/kinoforge/runnel-dashboard`. Needs Runnel 0.0.3-beta.1 or newer.
 
-[Unreleased]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.1...HEAD
+[Unreleased]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.2...HEAD
+[0.0.3-beta.2]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.1...v0.0.3-beta.2
 [0.0.3-beta.1]: https://github.com/kinoforge/runnel-dashboard/releases/tag/v0.0.3-beta.1

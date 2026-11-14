@@ -1,7 +1,7 @@
 name: runnel-dashboard
 services:
   runnel:
-    image: ${RUNNEL_IMAGE:-ghcr.io/kinoforge/runnel:0.0.3-beta.1}
+    image: ${RUNNEL_IMAGE:-ghcr.io/kinoforge/runnel:0.0.3-beta.2}
     environment:
       RUNNEL_ADMIN_TOKEN: ${RUNNEL_ADMIN_TOKEN:?set RUNNEL_ADMIN_TOKEN}
       RUNNEL_STORE: hybrid:/data
