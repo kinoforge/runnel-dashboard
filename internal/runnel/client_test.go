@@ -6,10 +6,12 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -85,34 +87,80 @@ func TestClientCapsAnswerSize(t *testing.T) {
 	}
 }
 
-func TestSetPausedKeepsOtherFields(t *testing.T) {
+type sent struct {
+	method, path, media, ifMatch, ifNone, body string
+}
+
+func recorder(t *testing.T, answer func(w http.ResponseWriter)) (*Client, *[]sent) {
+	t.Helper()
 	var mu sync.Mutex
-	stored := map[string]any{"name": "p", "slots": 5.0, "rate": 2.5, "paused": true, "paused_until": "2030-01-01T00:00:00Z"}
+	var got []sent
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
-		if r.URL.Path != "/v1/ns/n/pools/p" {
-			t.Errorf("path %s", r.URL.Path)
-		}
-		if r.Method == http.MethodPut {
-			stored = map[string]any{}
-			_ = json.NewDecoder(r.Body).Decode(&stored)
-		}
-		_ = json.NewEncoder(w).Encode(stored)
+		b, _ := io.ReadAll(r.Body)
+		got = append(got, sent{r.Method, r.URL.Path, r.Header.Get("Content-Type"), r.Header.Get("If-Match"), r.Header.Get("If-None-Match"), string(b)})
+		answer(w)
 	}))
-	defer srv.Close()
-	c := New("t", endpoint(t, srv.URL), time.Second, 1<<20)
-	if err := c.SetPaused(context.Background(), "n", "pools", "p", false); err != nil {
+	t.Cleanup(srv.Close)
+	return New("t", endpoint(t, srv.URL), time.Second, 1<<20), &got
+}
+
+func TestSetPausedSendsOnePatch(t *testing.T) {
+	c, got := recorder(t, func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{}`)) })
+	ctx := context.Background()
+	for _, step := range []struct {
+		kind   string
+		paused bool
+		body   string
+	}{
+		{"pools", true, `{"paused":true}`},
+		{"pools", false, `{"paused":false,"paused_until":null}`},
+		{"queues", true, `{"paused":true}`},
+		{"queues", false, `{"paused":false}`},
+	} {
+		*got = nil
+		if err := c.SetPaused(ctx, "n", step.kind, "p", step.paused); err != nil {
+			t.Fatal(err)
+		}
+		want := sent{"PATCH", "/v1/ns/n/" + step.kind + "/p", "application/merge-patch+json", "", "", step.body}
+		if len(*got) != 1 || (*got)[0] != want {
+			t.Fatalf("%s paused=%v sent %+v", step.kind, step.paused, *got)
+		}
+	}
+	if err := c.SetPaused(ctx, "n", "schedules", "p", true); !errors.Is(err, ErrBadName) {
+		t.Fatalf("other kind %v", err)
+	}
+}
+
+func TestSettingAndPreconditions(t *testing.T) {
+	c, got := recorder(t, func(w http.ResponseWriter) {
+		w.Header().Set("ETag", `"v7"`)
+		_, _ = w.Write([]byte(`{"name":"p","slots":5,"rate":1.5}`))
+	})
+	ctx := context.Background()
+	var p Pool
+	tag, err := c.Setting(ctx, "n", "pools", "p", &p)
+	if err != nil || tag != `"v7"` || p.Slots != 5 || p.Rate != 1.5 {
+		t.Fatalf("setting %q %+v %v", tag, p, err)
+	}
+	if err := c.Patch(ctx, "n", "pools", "p", map[string]any{"rate": nil}, Match{ETag: tag}); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := stored["paused"]; ok || stored["paused_until"] != nil || stored["slots"] != 5.0 || stored["rate"] != 2.5 {
-		t.Fatalf("resume stored %v", stored)
+	if err := c.Patch(ctx, "n", "queues", "q", map[string]any{"rate": 2}, Match{Absent: true}); err != nil {
+		t.Fatal(err)
 	}
-	if err := c.SetPaused(context.Background(), "n", "pools", "p", true); err != nil || stored["paused"] != true || stored["slots"] != 5.0 {
-		t.Fatalf("pause stored %v %v", stored, err)
+	want := []sent{
+		{"GET", "/v1/ns/n/pools/p", "", "", "", ""},
+		{"PATCH", "/v1/ns/n/pools/p", "application/merge-patch+json", `"v7"`, "", `{"rate":null}`},
+		{"PATCH", "/v1/ns/n/queues/q", "application/merge-patch+json", "", "*", `{"rate":2}`},
 	}
-	if err := c.SetPaused(context.Background(), "n", "schedules", "p", true); !errors.Is(err, ErrBadName) {
-		t.Fatalf("other kind %v", err)
+	if !slices.Equal(*got, want) {
+		t.Fatalf("sent %+v", *got)
+	}
+	bare, _ := recorder(t, func(w http.ResponseWriter) { _, _ = w.Write([]byte(`{}`)) })
+	if _, err := bare.Setting(ctx, "n", "pools", "p", &p); err == nil || !strings.Contains(err.Error(), "0.0.3-beta.2") {
+		t.Fatalf("missing ETag: %v", err)
 	}
 }
 

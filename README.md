@@ -1,6 +1,6 @@
 # Runnel dashboard
 
-A small web UI for one or more Runnel servers. It shows instances, namespaces, queues, pools with the slots in use, schedules, events, jobs, memory and storage. It can cancel and retry jobs and pause or resume queues and pools.
+A small web UI for one or more Runnel servers. It shows instances, namespaces, queues, pools with the slots in use, schedules, events, jobs, memory and storage. It can cancel and retry jobs, pause or resume queues and pools, and change their rate and burst.
 
 It is one Go binary with the pages and htmx built in. There is no Node, no build step and no database. The browser never sees a Runnel password: the dashboard keeps it and calls Runnel itself.
 
@@ -63,7 +63,13 @@ instances:
 - `${NAME}` is replaced by the environment variable `NAME`, so passwords can stay out of the file. Inside a URL the value is escaped, so any character is safe. A variable that fills the whole `url` is used as it is. An empty or missing variable stops the start.
 - `ca` trusts your own CA. `cert` and `key` send a client certificate, which Runnel accepts as admin when it has `server.tls.client_ca`. They need https.
 - The dashboard needs admin access: listing namespaces and reading memory and storage need it.
-- Basic auth, client certificates and memory and storage need Runnel 0.0.3-beta.1 or newer.
+- Needs Runnel 0.0.3-beta.2 or newer: pause, resume and settings send `PATCH` with `If-Match`.
+
+## Changing settings
+
+Each queue and pool has a Settings page. It changes the start rate and burst, and a pool can be paused for a while, such as `30m`. Pool slots are read-only: the app that owns a pool sets them.
+
+Saving sends only these fields as a merge patch, with the `ETag` the page was loaded with. Fields set elsewhere stay as they are. If someone changed the setting after the page loaded, nothing is saved and the page asks you to reload. Pause and resume change only `paused` (and `paused_until` on resume), so an app that sets slots at the same time keeps the pause.
 
 ## Security
 

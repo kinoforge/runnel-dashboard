@@ -2,6 +2,7 @@ package runnel
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -64,39 +65,55 @@ func Path(parts ...string) (string, error) {
 	return b.String(), nil
 }
 
+type call struct {
+	method, path string
+	query        url.Values
+	body         any
+	media        string
+	header       http.Header
+}
+
 func (c *Client) do(ctx context.Context, method, path string, q url.Values, body, out any) error {
+	_, err := c.send(ctx, call{method: method, path: path, query: q, body: body}, out)
+	return err
+}
+
+func (c *Client) send(ctx context.Context, k call, out any) (http.Header, error) {
 	var r io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
+	if k.body != nil {
+		b, err := json.Marshal(k.body)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		r = bytes.NewReader(b)
 	}
-	u := c.base + path
-	if len(q) > 0 {
-		u += "?" + q.Encode()
+	u := c.base + k.path
+	if len(k.query) > 0 {
+		u += "?" + k.query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u, r)
+	req, err := http.NewRequestWithContext(ctx, k.method, u, r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	c.auth(req)
+	for name, values := range k.header {
+		req.Header[name] = values
+	}
 	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if k.body != nil {
+		req.Header.Set("Content-Type", cmp.Or(k.media, "application/json"))
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("runnel %s: %w", c.Name, err)
+		return nil, fmt.Errorf("runnel %s: %w", c.Name, err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, c.maxBytes+1))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if int64(len(raw)) > c.maxBytes {
-		return fmt.Errorf("runnel %s: answer is larger than %d bytes", c.Name, c.maxBytes)
+		return nil, fmt.Errorf("runnel %s: answer is larger than %d bytes", c.Name, c.maxBytes)
 	}
 	if resp.StatusCode >= 300 {
 		ae := &APIError{Status: resp.StatusCode, Title: http.StatusText(resp.StatusCode)}
@@ -104,12 +121,12 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, body
 		if json.Unmarshal(raw, &p) == nil && p.Title != "" {
 			ae.Title, ae.Detail = p.Title, p.Detail
 		}
-		return ae
+		return resp.Header, ae
 	}
 	if out == nil || len(raw) == 0 {
-		return nil
+		return resp.Header, nil
 	}
-	return json.Unmarshal(raw, out)
+	return resp.Header, json.Unmarshal(raw, out)
 }
 
 func (c *Client) get(ctx context.Context, path string, q url.Values, out any) error {
@@ -187,25 +204,56 @@ func items[T any](ctx context.Context, c *Client, ns, kind string) (map[string]T
 	return out.Items, c.get(ctx, p, nil, &out)
 }
 
-func (c *Client) SetPaused(ctx context.Context, ns, kind, name string, paused bool) error {
+type Match struct {
+	ETag   string
+	Absent bool
+}
+
+func settingPath(ns, kind, name string) (string, error) {
 	if kind != "queues" && kind != "pools" {
-		return fmt.Errorf("%w: kind %q", ErrBadName, kind)
+		return "", fmt.Errorf("%w: kind %q", ErrBadName, kind)
 	}
-	p, err := Path("/v1/ns", ns, kind, name)
+	return Path("/v1/ns", ns, kind, name)
+}
+
+func (c *Client) Setting(ctx context.Context, ns, kind, name string, out any) (string, error) {
+	p, err := settingPath(ns, kind, name)
+	if err != nil {
+		return "", err
+	}
+	h, err := c.send(ctx, call{method: http.MethodGet, path: p}, out)
+	if err != nil {
+		return "", err
+	}
+	tag := h.Get("ETag")
+	if tag == "" {
+		return "", fmt.Errorf("runnel %s: no ETag on %s; settings need Runnel 0.0.3-beta.2 or later", c.Name, p)
+	}
+	return tag, nil
+}
+
+func (c *Client) Patch(ctx context.Context, ns, kind, name string, fields map[string]any, m Match) error {
+	p, err := settingPath(ns, kind, name)
 	if err != nil {
 		return err
 	}
-	cfg := map[string]any{}
-	if err := c.get(ctx, p, nil, &cfg); err != nil {
-		return err
+	h := http.Header{}
+	switch {
+	case m.ETag != "":
+		h.Set("If-Match", m.ETag)
+	case m.Absent:
+		h.Set("If-None-Match", "*")
 	}
-	if paused {
-		cfg["paused"] = true
-	} else {
-		delete(cfg, "paused")
-		delete(cfg, "paused_until")
+	_, err = c.send(ctx, call{method: http.MethodPatch, path: p, body: fields, media: "application/merge-patch+json", header: h}, nil)
+	return err
+}
+
+func (c *Client) SetPaused(ctx context.Context, ns, kind, name string, paused bool) error {
+	fields := map[string]any{"paused": paused}
+	if !paused && kind == "pools" {
+		fields["paused_until"] = nil
 	}
-	return c.do(ctx, http.MethodPut, p, nil, cfg, nil)
+	return c.Patch(ctx, ns, kind, name, fields, Match{})
 }
 
 func (c *Client) Events(ctx context.Context, ns string, after int64, limit int) ([]Event, error) {

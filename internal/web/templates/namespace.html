@@ -19,11 +19,12 @@
     <td><a href="{{$base}}/jobs?queue={{.Name}}">{{.Name}}</a>{{if and .Config .Config.Paused}} <span class="pill warn">paused</span>{{end}}</td>
     {{range $d.States}}<td class="num">{{if count $q.Counts .}}<a href="{{$base}}/jobs?queue={{$q.Name}}&state={{.}}">{{count $q.Counts .}}</a>{{else}}0{{end}}</td>{{end}}
     <td class="small">{{with .Config}}{{if .MaxRunning}}max running {{.MaxRunning}} {{end}}{{if .MaxQueued}}max queued {{.MaxQueued}} {{end}}{{if .Rate}}rate {{.Rate}}/s {{end}}{{if .MaxAttempts}}attempts {{.MaxAttempts}}{{end}}{{else}}<span class="muted">defaults</span>{{end}}</td>
-    <td>{{if .Config}}{{if .Config.Paused}}
+    <td>{{if and .Config .Config.Paused}}
       <button hx-post="{{$base}}/queues/{{.Name}}/resume" hx-target="#flash" hx-confirm="Resume queue {{.Name}}?">Resume</button>
       {{else}}
       <button class="warn" hx-post="{{$base}}/queues/{{.Name}}/pause" hx-target="#flash" hx-confirm="Pause queue {{.Name}}? No new jobs will start.">Pause</button>
-      {{end}}{{end}}</td>
+      {{end}}
+      <a class="button" href="{{$base}}/queues/{{.Name}}">Settings</a></td>
   </tr>
   {{else}}
   <tr><td colspan="11" class="muted">No queues yet.</td></tr>
@@ -49,7 +50,8 @@
       <button hx-post="{{$base}}/pools/{{.Name}}/resume" hx-target="#flash" hx-confirm="Resume pool {{.Name}}?">Resume</button>
       {{else}}
       <button class="warn" hx-post="{{$base}}/pools/{{.Name}}/pause" hx-target="#flash" hx-confirm="Pause pool {{.Name}}? No new jobs in it will start.">Pause</button>
-      {{end}}</td>
+      {{end}}
+      <a class="button" href="{{$base}}/pools/{{.Name}}">Settings</a></td>
   </tr>
   {{else}}
   <tr><td colspan="5" class="muted">No pools set.</td></tr>

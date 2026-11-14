@@ -4,6 +4,16 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Settings pages for queues and pools: start rate, burst, and pause a pool for a while. Saving sends a merge patch with `If-Match`, so a newer change is never overwritten.
+- Pause works on queues that have no settings yet.
+
+### Changed
+
+- Pause and resume send one `PATCH` of `paused` instead of reading and writing back the whole setting, so an app that sets pool slots at the same time no longer undoes a pause.
+- Needs Runnel 0.0.3-beta.2 or newer.
+
 ## [0.0.3-beta.1] - 2026-11-14
 
 ### Added

@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -25,10 +26,69 @@ const (
 	jobID       = "01900000-0000-7000-8000-000000000001"
 )
 
+type patchCall struct {
+	path, ifMatch, ifNone, media string
+	body                         map[string]any
+}
+
 type fakeRunnel struct {
-	mu   sync.Mutex
-	puts map[string]map[string]any
-	hits []string
+	mu       sync.Mutex
+	settings map[string]map[string]any
+	versions map[string]int
+	patches  []patchCall
+	hits     []string
+}
+
+func newFake() *fakeRunnel {
+	return &fakeRunnel{
+		settings: map[string]map[string]any{
+			"/v1/ns/shop/queues/emails": {"name": "emails", "max_running": 4.0},
+			"/v1/ns/shop/pools/api":     {"name": "api", "slots": 5.0, "rate": 1.5},
+		},
+		versions: map[string]int{},
+	}
+}
+
+func (f *fakeRunnel) tag(path string) string { return fmt.Sprintf(`"v%d"`, f.versions[path]) }
+
+func (f *fakeRunnel) setting(w http.ResponseWriter, r *http.Request) bool {
+	path := r.URL.Path
+	if !strings.HasPrefix(path, "/v1/ns/shop/queues/") && !strings.HasPrefix(path, "/v1/ns/shop/pools/") {
+		return false
+	}
+	cur, found := f.settings[path]
+	switch r.Method {
+	case http.MethodGet:
+		if !found {
+			return false
+		}
+	case http.MethodPatch:
+		call := patchCall{path: path, ifMatch: r.Header.Get("If-Match"), ifNone: r.Header.Get("If-None-Match"), media: r.Header.Get("Content-Type")}
+		_ = json.NewDecoder(r.Body).Decode(&call.body)
+		f.patches = append(f.patches, call)
+		if (call.ifMatch != "" && (!found || call.ifMatch != f.tag(path))) || (call.ifNone == "*" && found) {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			_, _ = w.Write([]byte(`{"title":"precondition failed"}`))
+			return true
+		}
+		if !found {
+			cur = map[string]any{"name": path[strings.LastIndexByte(path, '/')+1:]}
+			f.settings[path] = cur
+		}
+		for k, v := range call.body {
+			if v == nil {
+				delete(cur, k)
+			} else {
+				cur[k] = v
+			}
+		}
+		f.versions[path]++
+	default:
+		return false
+	}
+	w.Header().Set("ETag", f.tag(path))
+	_ = json.NewEncoder(w).Encode(cur)
+	return true
 }
 
 func (f *fakeRunnel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -48,9 +108,7 @@ func (f *fakeRunnel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"GET /v1/namespaces":                         `{"items":[{"name":"shop","keys":[]}]}`,
 		"GET /v1/namespaces/shop":                    `{"name":"shop","keys":[{"id":"k1","roles":["admin"]}],"stats":[{"queue":"emails","counts":{"waiting":3,"running":2}}]}`,
 		"GET /v1/ns/shop/queues":                     `{"items":{"emails":{"name":"emails","max_running":4}}}`,
-		"GET /v1/ns/shop/queues/emails":              `{"name":"emails","max_running":4}`,
 		"GET /v1/ns/shop/pools":                      `{"items":{"api":{"name":"api","slots":5}}}`,
-		"GET /v1/ns/shop/pools/api":                  `{"name":"api","slots":5,"rate":1.5}`,
 		"GET /v1/ns/shop/schedules":                  `{"items":{}}`,
 		"GET /v1/ns/shop/events":                     `{"items":[{"seq":1,"job_id":"` + jobID + `","queue":"emails","kind":"send","state":"waiting"}]}`,
 		"GET /v1/ns/shop/jobs/" + jobID:              `{"id":"` + jobID + `","queue":"emails","kind":"send","state":"running","payload":{"html":"<script>alert(1)</script>"}}`,
@@ -65,11 +123,7 @@ func (f *fakeRunnel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if r.Method == http.MethodPut {
-		m := map[string]any{}
-		_ = json.NewDecoder(r.Body).Decode(&m)
-		f.puts[r.URL.Path] = m
-		_, _ = w.Write([]byte(`{}`))
+	if f.setting(w, r) {
 		return
 	}
 	if b, ok := body[key]; ok {
@@ -90,7 +144,7 @@ type rig struct {
 
 func newRig(t *testing.T, mutate ...func(*config.Config)) *rig {
 	t.Helper()
-	fake := &fakeRunnel{puts: map[string]map[string]any{}}
+	fake := newFake()
 	rs := httptest.NewServer(fake)
 	t.Cleanup(rs.Close)
 	h, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)

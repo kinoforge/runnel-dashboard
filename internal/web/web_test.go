@@ -153,8 +153,12 @@ func TestActions(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("pause %d", resp.StatusCode)
 	}
-	if got := r.fake.puts["/v1/ns/shop/pools/api"]; got["paused"] != true || got["slots"] != 5.0 || got["rate"] != 1.5 {
-		t.Fatalf("pause wrote %v", got)
+	last := r.fake.patches[len(r.fake.patches)-1]
+	if last.path != "/v1/ns/shop/pools/api" || last.ifMatch != "" || len(last.body) != 1 || last.body["paused"] != true {
+		t.Fatalf("pause sent %+v", last)
+	}
+	if got := r.fake.settings["/v1/ns/shop/pools/api"]; got["paused"] != true || got["slots"] != 5.0 || got["rate"] != 1.5 {
+		t.Fatalf("pool after pause %v", got)
 	}
 	_, body := r.do("POST", "/i/prod/ns/shop/jobs/"+jobID+"/retry", nil, h)
 	if !strings.Contains(body, "Could not retry") {

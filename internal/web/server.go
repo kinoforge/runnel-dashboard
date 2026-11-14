@@ -81,6 +81,10 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /i/{inst}/ns/{ns}/jobs/{id}", s.authed(s.job))
 	s.mux.Handle("POST /i/{inst}/ns/{ns}/jobs/{id}/{action}", s.authed(s.jobAction))
 	s.mux.Handle("POST /i/{inst}/ns/{ns}/{kind}/{name}/{op}", s.authed(s.pauseAction))
+	for _, kind := range []string{"queues", "pools"} {
+		s.mux.Handle("GET /i/{inst}/ns/{ns}/"+kind+"/{name}", s.authed(s.settings(kind)))
+		s.mux.Handle("POST /i/{inst}/ns/{ns}/"+kind+"/{name}", s.authed(s.saveSettings(kind)))
+	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

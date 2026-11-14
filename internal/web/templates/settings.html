@@ -1,0 +1,30 @@
+{{define "content"}}
+{{$d := .Data}}
+{{$c := $d.Config}}
+{{$pool := eq $d.Kind "pools"}}
+<h1>{{if $pool}}Pool{{else}}Queue{{end}} {{$d.Name}}{{if $c.Paused}} <span class="pill warn">paused</span>{{end}}</h1>
+{{if $d.New}}<p class="muted">No settings yet. Saving creates them.</p>{{end}}
+<table class="kv">
+  {{if $pool}}
+  <tr><th>Slots</th><td>{{if $c.Slots}}{{$c.Slots}}{{else}}no cap{{end}} <span class="muted">set by the app that owns the pool</span></td></tr>
+  <tr><th>Per group</th><td>{{if $c.GroupSlots}}{{$c.GroupSlots}}{{else}}no cap{{end}} <span class="muted">set by the app that owns the pool</span></td></tr>
+  <tr><th>Paused until</th><td>{{if $c.PausedUntil.IsZero}}<span class="muted">not set</span>{{else}}{{when $c.PausedUntil}}{{end}}</td></tr>
+  {{else}}
+  <tr><th>Max running</th><td>{{if $c.MaxRunning}}{{$c.MaxRunning}}{{else}}no cap{{end}}</td></tr>
+  <tr><th>Per group running</th><td>{{if $c.GroupMaxRunning}}{{$c.GroupMaxRunning}}{{else}}no cap{{end}}</td></tr>
+  <tr><th>Max queued</th><td>{{if $c.MaxQueued}}{{$c.MaxQueued}}{{else}}no cap{{end}}</td></tr>
+  <tr><th>Per group queued</th><td>{{if $c.GroupMaxQueued}}{{$c.GroupMaxQueued}}{{else}}no cap{{end}}</td></tr>
+  <tr><th>Attempts</th><td>{{if $c.MaxAttempts}}{{$c.MaxAttempts}}{{else}}default{{end}}</td></tr>
+  <tr><th>Timeout</th><td>{{or $c.Timeout "default"}}</td></tr>
+  <tr><th>Retention</th><td>{{or $c.Retention "default"}}</td></tr>
+  {{end}}
+</table>
+<form class="settings" hx-post="/i/{{$d.Inst}}/ns/{{$d.NS}}/{{$d.Kind}}/{{$d.Name}}" hx-target="#flash" hx-confirm="Save these settings for {{$d.Name}}?">
+  <input type="hidden" name="etag" value="{{$d.ETag}}">
+  <label>Starts per second <input name="rate" type="number" min="0" max="1000000" step="any" value="{{if $c.Rate}}{{$c.Rate}}{{end}}" placeholder="no limit"></label>
+  <label>Burst <input name="burst" type="number" min="0" step="1" value="{{if $c.Burst}}{{$c.Burst}}{{end}}" placeholder="default"></label>
+  {{if $pool}}<label>Pause for <input name="pause_for" placeholder="30m or 2h" maxlength="20"></label>{{end}}
+  <button type="submit">Save</button>
+</form>
+<p class="muted small">Saving changes only these fields. If someone changed the {{if $pool}}pool{{else}}queue{{end}} since this page loaded, nothing is saved and you are asked to reload.</p>
+{{end}}
