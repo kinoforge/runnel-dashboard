@@ -3,7 +3,9 @@ package web
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -60,13 +62,44 @@ func TestLoginAndLogout(t *testing.T) {
 }
 
 func TestLoginLimiter(t *testing.T) {
-	r := newRig(t, func(c *config.Config) { c.Login.MaxAttempts = 2 })
+	r := newRig(t, func(c *config.Config) { c.Login.MaxAttempts = 2; c.ClientIPHeader = "X-Forwarded-For" })
+	from := func(ip string) map[string]string { return map[string]string{"X-Forwarded-For": ip} }
 	for range 2 {
-		r.do("POST", "/login", url.Values{"user": {"admin"}, "password": {"nope nope nope"}}, nil)
+		r.do("POST", "/login", url.Values{"user": {"admin"}, "password": {"nope nope nope"}}, from("203.0.113.1"))
 	}
-	resp, _ := r.do("POST", "/login", url.Values{"user": {"admin"}, "password": {password}}, nil)
+	resp, _ := r.do("POST", "/login", url.Values{"user": {"admin"}, "password": {password}}, from("203.0.113.1"))
 	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("right password while blocked %d", resp.StatusCode)
+	}
+	resp, _ = r.do("POST", "/login", url.Values{"user": {"admin"}, "password": {password}}, from("203.0.113.2"))
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("one address locked the user out everywhere: %d", resp.StatusCode)
+	}
+	long := strings.Repeat("a", 64<<10)
+	r.do("POST", "/login", url.Values{"user": {long}, "password": {"x"}}, from("203.0.113.3"))
+	if strings.Contains(r.logs.String(), long[:1000]) {
+		t.Fatal("an oversized user name was logged in full")
+	}
+}
+
+func TestLoginLimiterPerUser(t *testing.T) {
+	r := newRig(t, func(c *config.Config) { c.Login.UserMaxAttempts = 2; c.ClientIPHeader = "X-Forwarded-For" })
+	for i := range 2 {
+		r.do("POST", "/login", url.Values{"user": {"admin"}, "password": {"nope nope nope"}}, map[string]string{"X-Forwarded-For": fmt.Sprintf("203.0.113.%d", i+1)})
+	}
+	resp, _ := r.do("POST", "/login", url.Values{"user": {"admin"}, "password": {password}}, map[string]string{"X-Forwarded-For": "203.0.113.9"})
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("user limit not applied across addresses: %d", resp.StatusCode)
+	}
+}
+
+func TestClientIPFromLastHeaderLine(t *testing.T) {
+	s := &Server{cfg: &config.Config{ClientIPHeader: "X-Forwarded-For"}}
+	req := httptest.NewRequest("POST", "/login", nil)
+	req.Header.Add("X-Forwarded-For", "198.51.100.7")
+	req.Header.Add("X-Forwarded-For", "203.0.113.5, 192.0.2.1")
+	if got := s.clientIP(req); got != "192.0.2.1" {
+		t.Fatalf("client ip %q", got)
 	}
 }
 
@@ -100,7 +133,7 @@ func TestPagesRenderAndNeverLeakToken(t *testing.T) {
 		"/":                                {"v1.2.3", "50.0 MiB of 100.0 MiB", "hybrid"},
 		"/i/prod":                          {"shop", "log_bytes"},
 		"/i/prod/ns/shop":                  {"emails", "max running 4"},
-		"/i/prod/ns/shop?tab=pools":        {`value="2"`, "2 / 5"},
+		"/i/prod/ns/shop?tab=pools":        {`value="2"`, "2 / 5", "pools/batch/resume", "pools/api/pause"},
 		"/i/prod/ns/shop?tab=events":       {jobID},
 		"/i/prod/ns/shop?tab=keys":         {"k1"},
 		"/i/prod/ns/shop?tab=schedules":    {"No schedules"},

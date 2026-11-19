@@ -41,7 +41,8 @@ Every setting has a default. Only `users` and `instances` are required. See `das
 | `running_scan_limit` | `10000` | Most running jobs read to count pool slots. `0` turns counting off |
 | `page_size` | `50` | Jobs and events per page |
 | `max_response_bytes` | `16 MiB` | Largest answer read from Runnel |
-| `login.max_attempts`, `login.window` | `5`, `15m` | Failed logins allowed per IP and per user name before logins are blocked for the window |
+| `login.max_attempts`, `login.window` | `5`, `15m` | Failed logins allowed per IP before logins from it are blocked for the window |
+| `login.user_max_attempts` | `0` (off) | Failed logins allowed for one user name from all IPs before that user is blocked for the window. Anyone can then lock that user out, so it is off by default |
 | `http.*` | see the example | Server timeouts and the request body cap |
 
 Each instance has a `name`, a `timeout` (default `10s`) and a connection `url`, like a Redis or Postgres URL:
@@ -81,7 +82,7 @@ Saving sends only these fields as a merge patch, with the `ETag` the page was lo
 - **Cross-site requests:**
   - Every POST must come from the same origin; Go's `CrossOriginProtection` checks `Sec-Fetch-Site` and `Origin`.
   - It must also carry the session's CSRF token.
-- **Failed logins** are counted per IP and per user name and blocked once over the limit. Logins, logouts and every action are logged with the user name.
+- **Failed logins** are counted per IP, and per user name too when `login.user_max_attempts` is set, and blocked once over the limit. A user name or password longer than allowed fails without being stored or logged in full. With `client_ip_header`, the address is the last one in the last header line, the one your proxy added. Logins, logouts and every action are logged with the user name.
 - **Pages:**
   - Pages are rendered by Go's `html/template`, so job payloads and errors are always escaped.
   - The Content Security Policy allows only the dashboard's own scripts and styles, with no inline code and no eval.

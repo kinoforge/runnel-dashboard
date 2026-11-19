@@ -26,6 +26,8 @@ type Server struct {
 	users     *auth.Users
 	sessions  *auth.Sessions
 	limiter   *auth.Limiter
+	userLimit *auth.Limiter
+	now       func() time.Time
 	clients   map[string]*runnel.Client
 	order     []string
 	pages     *pages
@@ -35,6 +37,9 @@ type Server struct {
 }
 
 func New(cfg *config.Config, log *slog.Logger, now func() time.Time) (*Server, error) {
+	if now == nil {
+		now = time.Now
+	}
 	hashes := map[string]string{}
 	for _, u := range cfg.Users {
 		hashes[u.Name] = u.PasswordHash
@@ -45,8 +50,11 @@ func New(cfg *config.Config, log *slog.Logger, now func() time.Time) (*Server, e
 	}
 	s := &Server{cfg: cfg, log: log, users: auth.NewUsers(hashes), pages: p, mux: http.NewServeMux(),
 		sessions: auth.NewSessions(cfg.SessionTTL, cfg.IdleTimeout, now),
-		limiter:  auth.NewLimiter(cfg.Login.MaxAttempts, cfg.Login.Window, now),
-		clients:  map[string]*runnel.Client{}, cookie: "runnel_dash", crossSite: http.NewCrossOriginProtection()}
+		limiter:  auth.NewLimiter(cfg.Login.MaxAttempts, cfg.Login.Window, now), now: now,
+		clients: map[string]*runnel.Client{}, cookie: "runnel_dash", crossSite: http.NewCrossOriginProtection()}
+	if cfg.Login.UserMaxAttempts > 0 {
+		s.userLimit = auth.NewLimiter(cfg.Login.UserMaxAttempts, cfg.Login.Window, now)
+	}
 	if cfg.Secure() {
 		s.cookie = "__Host-runnel_dash"
 	}
@@ -144,9 +152,11 @@ func validCSRF(r *http.Request, want string) bool {
 
 func (s *Server) clientIP(r *http.Request) string {
 	if s.cfg.ClientIPHeader != "" {
-		if v := r.Header.Get(s.cfg.ClientIPHeader); v != "" {
-			parts := strings.Split(v, ",")
-			return strings.TrimSpace(parts[len(parts)-1])
+		if vs := r.Header.Values(s.cfg.ClientIPHeader); len(vs) > 0 {
+			parts := strings.Split(vs[len(vs)-1], ",")
+			if ip := strings.TrimSpace(parts[len(parts)-1]); ip != "" {
+				return ip
+			}
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

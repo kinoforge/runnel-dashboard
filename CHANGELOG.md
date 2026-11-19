@@ -4,6 +4,17 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `login.user_max_attempts` limits failed logins for one user name from all addresses. It is off by default.
+
+### Fixed
+
+- Failed logins no longer block a user name everywhere by default. Before, anyone could send five wrong passwords for `admin` and lock it out from every address for the window.
+- An oversized user name on a failed login is no longer stored in the limiter or logged in full.
+- With `client_ip_header`, the client address comes from the last header line, the one the proxy added, so a client cannot choose its own address with an extra header line.
+- A pool paused for a while with "pause for" shows Resume, and can be resumed early.
+
 ## [0.0.3-beta.2] - 2026-11-14
 
 ### Added

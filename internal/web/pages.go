@@ -115,6 +115,7 @@ type queueRow struct {
 type poolRow struct {
 	runnel.Pool
 	Used int
+	Held bool
 }
 
 func (s *Server) namespace(w http.ResponseWriter, r *http.Request, sess auth.Session) {
@@ -196,7 +197,7 @@ func (s *Server) poolRows(ctx context.Context, c *runnel.Client, ns string) ([]p
 	}
 	out := make([]poolRow, 0, len(cfgs))
 	for _, p := range sortedValues(cfgs) {
-		out = append(out, poolRow{Pool: p, Used: used[p.Name]})
+		out = append(out, poolRow{Pool: p, Used: used[p.Name], Held: p.Paused || s.now().Before(p.PausedUntil)})
 	}
 	return out, truncated, nil
 }

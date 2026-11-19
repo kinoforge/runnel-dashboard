@@ -108,7 +108,7 @@ func (f *fakeRunnel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"GET /v1/namespaces":                         `{"items":[{"name":"shop","keys":[]}]}`,
 		"GET /v1/namespaces/shop":                    `{"name":"shop","keys":[{"id":"k1","roles":["admin"]}],"stats":[{"queue":"emails","counts":{"waiting":3,"running":2}}]}`,
 		"GET /v1/ns/shop/queues":                     `{"items":{"emails":{"name":"emails","max_running":4}}}`,
-		"GET /v1/ns/shop/pools":                      `{"items":{"api":{"name":"api","slots":5}}}`,
+		"GET /v1/ns/shop/pools":                      `{"items":{"api":{"name":"api","slots":5},"batch":{"name":"batch","paused_until":"2999-01-01T00:00:00Z"}}}`,
 		"GET /v1/ns/shop/schedules":                  `{"items":{}}`,
 		"GET /v1/ns/shop/events":                     `{"items":[{"seq":1,"job_id":"` + jobID + `","queue":"emails","kind":"send","state":"waiting"}]}`,
 		"GET /v1/ns/shop/jobs/" + jobID:              `{"id":"` + jobID + `","queue":"emails","kind":"send","state":"running","payload":{"html":"<script>alert(1)</script>"}}`,

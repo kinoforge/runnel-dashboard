@@ -36,8 +36,9 @@ type Config struct {
 }
 
 type Login struct {
-	MaxAttempts int           `yaml:"max_attempts"`
-	Window      time.Duration `yaml:"window"`
+	MaxAttempts     int           `yaml:"max_attempts"`
+	UserMaxAttempts int           `yaml:"user_max_attempts"`
+	Window          time.Duration `yaml:"window"`
 }
 
 type HTTP struct {

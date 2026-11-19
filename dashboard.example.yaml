@@ -12,6 +12,7 @@ page_size: 50
 max_response_bytes: 16777216
 login:
   max_attempts: 5
+  user_max_attempts: 0
   window: 15m
 http:
   read_header_timeout: 10s

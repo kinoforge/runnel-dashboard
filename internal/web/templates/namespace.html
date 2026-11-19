@@ -46,7 +46,7 @@
     <td>{{if .Slots}}<meter min="0" max="{{.Slots}}" value="{{.Used}}" high="{{.Slots}}"></meter> {{.Used}} / {{.Slots}}{{else}}{{.Used}} running · no cap{{end}}{{if $d.Truncated}}+{{end}}</td>
     <td>{{if .GroupSlots}}{{.GroupSlots}}{{else}}<span class="muted">—</span>{{end}}</td>
     <td>{{if .Rate}}{{.Rate}}/s burst {{.Burst}}{{else}}<span class="muted">—</span>{{end}}</td>
-    <td>{{if .Paused}}
+    <td>{{if .Held}}
       <button hx-post="{{$base}}/pools/{{.Name}}/resume" hx-target="#flash" hx-confirm="Resume pool {{.Name}}?">Resume</button>
       {{else}}
       <button class="warn" hx-post="{{$base}}/pools/{{.Name}}/pause" hx-target="#flash" hx-confirm="Pause pool {{.Name}}? No new jobs in it will start.">Pause</button>
