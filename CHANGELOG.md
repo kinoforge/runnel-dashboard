@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.0.3-beta.3] - 2026-11-19
+
 ### Added
 
 - `login.user_max_attempts` limits failed logins for one user name from all addresses. It is off by default.
@@ -37,6 +39,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - Each Runnel instance is one connection URL, such as `https://admin:${PASSWORD}@host:8700?ca=ca.pem`, with optional client certificates.
 - Images at `ghcr.io/kinoforge/runnel-dashboard`. Needs Runnel 0.0.3-beta.1 or newer.
 
-[Unreleased]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.2...HEAD
+[Unreleased]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.3...HEAD
+[0.0.3-beta.3]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.2...v0.0.3-beta.3
 [0.0.3-beta.2]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.1...v0.0.3-beta.2
 [0.0.3-beta.1]: https://github.com/kinoforge/runnel-dashboard/releases/tag/v0.0.3-beta.1
