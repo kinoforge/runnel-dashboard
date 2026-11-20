@@ -165,9 +165,10 @@ func TestSettingAndPreconditions(t *testing.T) {
 }
 
 func TestPoolUsagePagesAndStops(t *testing.T) {
-	const total = 1203
+	totals := map[string]int{"running": 1203, "polling": 30}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("state") != "running" {
+		total, ok := totals[r.URL.Query().Get("state")]
+		if !ok {
 			t.Errorf("query %s", r.URL.RawQuery)
 		}
 		var from int
@@ -186,8 +187,12 @@ func TestPoolUsagePagesAndStops(t *testing.T) {
 	defer srv.Close()
 	c := New("t", endpoint(t, srv.URL), time.Second, 1<<20)
 	used, cut, err := c.PoolUsage(context.Background(), "n", 10000)
-	if err != nil || cut || used["a"] != 401 || used["b"] != 401 || len(used) != 2 {
+	if err != nil || cut || used["a"] != 411 || used["b"] != 411 || len(used) != 2 {
 		t.Fatalf("usage %v cut %v err %v", used, cut, err)
+	}
+	used, cut, err = c.PoolUsage(context.Background(), "n", 1233)
+	if err != nil || cut || used["a"]+used["b"] != 822 {
+		t.Fatalf("usage at the exact limit %v cut %v err %v", used, cut, err)
 	}
 	used, cut, err = c.PoolUsage(context.Background(), "n", 600)
 	if err != nil || !cut || used["a"]+used["b"] != 400 {

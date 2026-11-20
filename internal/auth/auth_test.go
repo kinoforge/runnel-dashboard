@@ -79,7 +79,7 @@ func TestSessionsExpire(t *testing.T) {
 
 func TestLimiter(t *testing.T) {
 	c := &clock{t: time.Unix(1000, 0)}
-	l := NewLimiter(3, time.Minute, c.now)
+	l := NewLimiter(3, time.Minute, 100, c.now)
 	for range 3 {
 		if !l.Allow("ip:1", "user:a") {
 			t.Fatal("blocked too early")

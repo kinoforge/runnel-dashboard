@@ -3,10 +3,12 @@ package web
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -50,10 +52,10 @@ func New(cfg *config.Config, log *slog.Logger, now func() time.Time) (*Server, e
 	}
 	s := &Server{cfg: cfg, log: log, users: auth.NewUsers(hashes), pages: p, mux: http.NewServeMux(),
 		sessions: auth.NewSessions(cfg.SessionTTL, cfg.IdleTimeout, now),
-		limiter:  auth.NewLimiter(cfg.Login.MaxAttempts, cfg.Login.Window, now), now: now,
+		limiter:  auth.NewLimiter(cfg.Login.MaxAttempts, cfg.Login.Window, cfg.Login.MaxTracked, now), now: now,
 		clients: map[string]*runnel.Client{}, cookie: "runnel_dash", crossSite: http.NewCrossOriginProtection()}
 	if cfg.Login.UserMaxAttempts > 0 {
-		s.userLimit = auth.NewLimiter(cfg.Login.UserMaxAttempts, cfg.Login.Window, now)
+		s.userLimit = auth.NewLimiter(cfg.Login.UserMaxAttempts, cfg.Login.Window, cfg.Login.MaxTracked, now)
 	}
 	if cfg.Secure() {
 		s.cookie = "__Host-runnel_dash"
@@ -134,9 +136,18 @@ func (s *Server) authed(h authedHandler) http.Handler {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
-		if r.Method != http.MethodGet && !validCSRF(r, sess.CSRF) {
-			http.Error(w, "missing or wrong CSRF token", http.StatusForbidden)
-			return
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			if err := r.ParseForm(); err != nil {
+				var tooBig *http.MaxBytesError
+				if errors.As(err, &tooBig) {
+					http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+					return
+				}
+			}
+			if !validCSRF(r, sess.CSRF) {
+				http.Error(w, "missing or wrong CSRF token", http.StatusForbidden)
+				return
+			}
 		}
 		h(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, c.Value)), sess)
 	})
@@ -151,19 +162,38 @@ func validCSRF(r *http.Request, want string) bool {
 }
 
 func (s *Server) clientIP(r *http.Request) string {
-	if s.cfg.ClientIPHeader != "" {
+	remote, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		remote = r.RemoteAddr
+	}
+	if s.cfg.ClientIPHeader != "" && s.trustProxy(remote) {
 		if vs := r.Header.Values(s.cfg.ClientIPHeader); len(vs) > 0 {
 			parts := strings.Split(vs[len(vs)-1], ",")
-			if ip := strings.TrimSpace(parts[len(parts)-1]); ip != "" {
-				return ip
+			if raw := strings.TrimSpace(parts[len(parts)-1]); raw != "" {
+				if addr, err := netip.ParseAddr(raw); err == nil {
+					return addr.Unmap().String()
+				}
 			}
 		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+	return remote
+}
+
+func (s *Server) trustProxy(remote string) bool {
+	if len(s.cfg.TrustedPrefixes) == 0 {
+		return true
 	}
-	return host
+	addr, err := netip.ParseAddr(remote)
+	if err != nil {
+		return false
+	}
+	addr = addr.Unmap()
+	for _, p := range s.cfg.TrustedPrefixes {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) client(w http.ResponseWriter, r *http.Request) (*runnel.Client, bool) {

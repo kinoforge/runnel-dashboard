@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -84,6 +85,9 @@ func TestParseRejects(t *testing.T) {
 		"bad inst name":   "users: [{name: a, password_hash: \"" + good + "\"}]\ninstances: [{name: \"a/b\", url: \"http://a:1\"}]",
 		"fast refresh":    "refresh: 100ms\nusers: [{name: a, password_hash: \"" + good + "\"}]\ninstances: [{name: a, url: \"http://a:1\"}]",
 		"half tls":        "tls_cert: /c\nusers: [{name: a, password_hash: \"" + good + "\"}]\ninstances: [{name: a, url: \"http://a:1\"}]",
+		"bad proxy":       "trusted_proxies: [\"nope\"]\nusers: [{name: a, password_hash: \"" + good + "\"}]\ninstances: [{name: a, url: \"http://a:1\"}]",
+		"negative cap":    "login: {max_tracked: -1}\nusers: [{name: a, password_hash: \"" + good + "\"}]\ninstances: [{name: a, url: \"http://a:1\"}]",
+		"zero body cap":   "http: {max_body_bytes: -1}\nusers: [{name: a, password_hash: \"" + good + "\"}]\ninstances: [{name: a, url: \"http://a:1\"}]",
 		"public url path": "public_url: https://d.example/x\nusers: [{name: a, password_hash: \"" + good + "\"}]\ninstances: [{name: a, url: \"http://a:1\"}]",
 	}
 	for name, body := range cases {
@@ -96,5 +100,20 @@ func TestParseRejects(t *testing.T) {
 				t.Fatalf("error %q lacks the config prefix", err)
 			}
 		})
+	}
+}
+
+func TestTrustedProxiesTakeAddressesAndRanges(t *testing.T) {
+	body := "trusted_proxies: [\"10.0.0.0/8\", \"192.0.2.7\", \"::ffff:198.51.100.1\"]\nusers: [{name: a, password_hash: \"" + hashOf(t) + "\"}]\ninstances: [{name: a, url: \"http://a:1\"}]"
+	c, err := Parse([]byte(body), env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := fmt.Sprint(c.TrustedPrefixes)
+	if got != "[10.0.0.0/8 192.0.2.7/32 198.51.100.1/32]" {
+		t.Fatalf("trusted prefixes %s", got)
+	}
+	if c.Login.MaxTracked != 10000 {
+		t.Fatalf("login.max_tracked default %d", c.Login.MaxTracked)
 	}
 }

@@ -35,6 +35,7 @@ Every setting has a default. Only `users` and `instances` are required. See `das
 | `secure_cookies` | `true` | Cookies only over https (localhost counts as secure in browsers). Set `false` only for plain http on a private network |
 | `tls_cert`, `tls_key` | none | Serve https directly. Otherwise put a TLS proxy in front |
 | `client_ip_header` | none | Header with the client IP from your proxy, such as `X-Forwarded-For`. Leave empty when nothing sits in front, or clients can fake their IP |
+| `trusted_proxies` | none (any) | IPs or CIDRs of your proxies. With `client_ip_header`, the header is read only from these addresses; others are counted by their own address. Empty trusts every sender, so set it whenever clients can reach the dashboard without the proxy |
 | `session_ttl` | `12h` | A session ends this long after login |
 | `idle_timeout` | `1h` | A session ends after this long without use |
 | `refresh` | `5s` | How often pages update. At least `1s` |
@@ -43,6 +44,7 @@ Every setting has a default. Only `users` and `instances` are required. See `das
 | `max_response_bytes` | `16 MiB` | Largest answer read from Runnel |
 | `login.max_attempts`, `login.window` | `5`, `15m` | Failed logins allowed per IP before logins from it are blocked for the window |
 | `login.user_max_attempts` | `0` (off) | Failed logins allowed for one user name from all IPs before that user is blocked for the window. Anyone can then lock that user out, so it is off by default |
+| `login.max_tracked` | `10000` | Most IPs and user names tracked for failed logins. When full, expired ones are dropped first, then the oldest |
 | `http.*` | see the example | Server timeouts and the request body cap |
 
 Each instance has a `name`, a `timeout` (default `10s`) and a connection `url`, like a Redis or Postgres URL:

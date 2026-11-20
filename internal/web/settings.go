@@ -47,7 +47,7 @@ func (s *Server) saveSettings(kind string) authedHandler {
 			return
 		}
 		ns, name := r.PathValue("ns"), r.PathValue("name")
-		fields, err := settingFields(r, kind, time.Now())
+		fields, err := settingFields(r, kind, s.now())
 		if err != nil {
 			s.flash(w, err.Error())
 			return

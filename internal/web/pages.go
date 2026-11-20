@@ -141,8 +141,9 @@ func (s *Server) namespace(w http.ResponseWriter, r *http.Request, sess auth.Ses
 		data["Schedules"] = sortedValues(all)
 	case "events":
 		after, _ := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
+		after = max(after, 0)
 		var evs []runnel.Event
-		evs, err = c.Events(r.Context(), ns, max(after, 0), s.cfg.PageSize)
+		evs, err = c.Events(r.Context(), ns, after, s.cfg.PageSize)
 		data["Events"], data["After"] = evs, after
 		if len(evs) == s.cfg.PageSize {
 			data["Next"] = evs[len(evs)-1].Seq

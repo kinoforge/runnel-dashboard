@@ -4,6 +4,7 @@ secure_cookies: true
 tls_cert: ""
 tls_key: ""
 client_ip_header: ""
+trusted_proxies: []
 session_ttl: 12h
 idle_timeout: 1h
 refresh: 5s
@@ -14,6 +15,7 @@ login:
   max_attempts: 5
   user_max_attempts: 0
   window: 15m
+  max_tracked: 10000
 http:
   read_header_timeout: 10s
   read_timeout: 30s

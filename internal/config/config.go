@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"regexp"
@@ -17,28 +18,31 @@ import (
 )
 
 type Config struct {
-	Listen           string        `yaml:"listen"`
-	PublicURL        string        `yaml:"public_url"`
-	SecureCookies    *bool         `yaml:"secure_cookies"`
-	TLSCert          string        `yaml:"tls_cert"`
-	TLSKey           string        `yaml:"tls_key"`
-	ClientIPHeader   string        `yaml:"client_ip_header"`
-	SessionTTL       time.Duration `yaml:"session_ttl"`
-	IdleTimeout      time.Duration `yaml:"idle_timeout"`
-	Refresh          time.Duration `yaml:"refresh"`
-	RunningScanLimit int           `yaml:"running_scan_limit"`
-	PageSize         int           `yaml:"page_size"`
-	MaxResponseBytes int64         `yaml:"max_response_bytes"`
-	Login            Login         `yaml:"login"`
-	HTTP             HTTP          `yaml:"http"`
-	Users            []User        `yaml:"users"`
-	Instances        []Instance    `yaml:"instances"`
+	Listen           string         `yaml:"listen"`
+	PublicURL        string         `yaml:"public_url"`
+	SecureCookies    *bool          `yaml:"secure_cookies"`
+	TLSCert          string         `yaml:"tls_cert"`
+	TLSKey           string         `yaml:"tls_key"`
+	ClientIPHeader   string         `yaml:"client_ip_header"`
+	TrustedProxies   []string       `yaml:"trusted_proxies"`
+	TrustedPrefixes  []netip.Prefix `yaml:"-"`
+	SessionTTL       time.Duration  `yaml:"session_ttl"`
+	IdleTimeout      time.Duration  `yaml:"idle_timeout"`
+	Refresh          time.Duration  `yaml:"refresh"`
+	RunningScanLimit int            `yaml:"running_scan_limit"`
+	PageSize         int            `yaml:"page_size"`
+	MaxResponseBytes int64          `yaml:"max_response_bytes"`
+	Login            Login          `yaml:"login"`
+	HTTP             HTTP           `yaml:"http"`
+	Users            []User         `yaml:"users"`
+	Instances        []Instance     `yaml:"instances"`
 }
 
 type Login struct {
 	MaxAttempts     int           `yaml:"max_attempts"`
 	UserMaxAttempts int           `yaml:"user_max_attempts"`
 	Window          time.Duration `yaml:"window"`
+	MaxTracked      int           `yaml:"max_tracked"`
 }
 
 type HTTP struct {
@@ -65,7 +69,7 @@ type Instance struct {
 var Defaults = Config{
 	Listen: ":8710", SessionTTL: 12 * time.Hour, IdleTimeout: time.Hour, Refresh: 5 * time.Second,
 	RunningScanLimit: 10000, PageSize: 50, MaxResponseBytes: 16 << 20,
-	Login: Login{MaxAttempts: 5, Window: 15 * time.Minute},
+	Login: Login{MaxAttempts: 5, Window: 15 * time.Minute, MaxTracked: 10000},
 	HTTP: HTTP{ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second,
 		IdleTimeout: 2 * time.Minute, ShutdownTimeout: 15 * time.Second, MaxBodyBytes: 64 << 10},
 }
@@ -114,6 +118,7 @@ func (c *Config) applyDefaults() {
 	pick(&c.MaxResponseBytes, d.MaxResponseBytes)
 	pick(&c.Login.MaxAttempts, d.Login.MaxAttempts)
 	pick(&c.Login.Window, d.Login.Window)
+	pick(&c.Login.MaxTracked, d.Login.MaxTracked)
 	pick(&c.HTTP.ReadHeaderTimeout, d.HTTP.ReadHeaderTimeout)
 	pick(&c.HTTP.ReadTimeout, d.HTTP.ReadTimeout)
 	pick(&c.HTTP.WriteTimeout, d.HTTP.WriteTimeout)
@@ -139,11 +144,21 @@ func pick[T comparable](v *T, fallback T) {
 func (c *Config) validate() error {
 	var errs []error
 	bad := func(format string, args ...any) { errs = append(errs, fmt.Errorf("config: "+format, args...)) }
-	if c.SessionTTL < 0 || c.IdleTimeout < 0 || c.Refresh < time.Second || c.Login.Window < 0 {
+	if c.SessionTTL < 0 || c.IdleTimeout < 0 || c.Refresh < time.Second || c.Login.Window < 0 ||
+		c.HTTP.ReadHeaderTimeout < 0 || c.HTTP.ReadTimeout < 0 || c.HTTP.WriteTimeout < 0 || c.HTTP.IdleTimeout < 0 || c.HTTP.ShutdownTimeout < 0 {
 		bad("durations must be positive and refresh at least 1s")
 	}
-	if c.RunningScanLimit < 0 || c.PageSize < 1 || c.PageSize > 500 || c.Login.MaxAttempts < 1 || c.MaxResponseBytes < 1 {
-		bad("running_scan_limit must be 0 or more, page_size 1 to 500, login.max_attempts and max_response_bytes at least 1")
+	if c.RunningScanLimit < 0 || c.PageSize < 1 || c.PageSize > 500 || c.Login.MaxAttempts < 1 || c.Login.UserMaxAttempts < 0 || c.Login.MaxTracked < 0 || c.MaxResponseBytes < 1 || c.HTTP.MaxBodyBytes < 1 {
+		bad("running_scan_limit, login.user_max_attempts and login.max_tracked must be 0 or more, page_size 1 to 500, login.max_attempts, max_response_bytes and http.max_body_bytes at least 1")
+	}
+	for _, raw := range c.TrustedProxies {
+		if p, err := netip.ParsePrefix(raw); err == nil {
+			c.TrustedPrefixes = append(c.TrustedPrefixes, p)
+		} else if a, err := netip.ParseAddr(raw); err == nil {
+			c.TrustedPrefixes = append(c.TrustedPrefixes, netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()))
+		} else {
+			bad("trusted_proxies entry %q must be an IP or CIDR", raw)
+		}
 	}
 	if (c.TLSCert == "") != (c.TLSKey == "") {
 		bad("tls_cert and tls_key go together")

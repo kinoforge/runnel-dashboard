@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/kinoforge/runnel-dashboard/internal/auth"
@@ -22,22 +23,25 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+	}
 	name, password := r.PostFormValue("user"), r.PostFormValue("password")
 	ip := s.clientIP(r)
 	sane := len(name) <= maxUserName && len(password) <= maxPassword
 	if !sane {
 		name = name[:min(len(name), maxUserName)]
 	}
-	if !s.limiter.Allow("ip:"+ip) || (s.userLimit != nil && !s.userLimit.Allow(name)) {
+	if !s.limiter.Take("ip:"+ip) || (s.userLimit != nil && sane && !s.userLimit.Take(name)) {
 		s.log.Warn("login blocked", "user", name, "ip", ip)
 		s.render(w, http.StatusTooManyRequests, "login", view{Title: "Sign in", Error: "Too many failed attempts. Try again later."})
 		return
 	}
 	if !sane || !s.users.Check(name, password) {
-		s.limiter.Fail("ip:" + ip)
-		if s.userLimit != nil && sane {
-			s.userLimit.Fail(name)
-		}
 		s.log.Warn("login failed", "user", name, "ip", ip)
 		s.render(w, http.StatusUnauthorized, "login", view{Title: "Sign in", Error: "Wrong user name or password."})
 		return
@@ -45,6 +49,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.limiter.Reset("ip:" + ip)
 	if s.userLimit != nil {
 		s.userLimit.Reset(name)
+	}
+	if old, err := r.Cookie(s.cookie); err == nil {
+		s.sessions.Delete(old.Value)
 	}
 	id, _ := s.sessions.Create(name)
 	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: id, Path: "/", MaxAge: int(s.cfg.SessionTTL.Seconds()),

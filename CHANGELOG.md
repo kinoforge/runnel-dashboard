@@ -4,6 +4,20 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- `trusted_proxies`: with `client_ip_header`, the header is read only from these proxy addresses or ranges, and anything else is counted by its own address. A header value that is not an IP address is ignored.
+- `login.max_tracked` caps how many IPs and user names the login limiter tracks (10000 by default). When full, expired entries go first, then the oldest.
+
+### Fixed
+
+- Concurrent wrong logins can no longer get past `login.max_attempts`: each attempt is counted before its password is checked.
+- Logging in ends the session the browser had before.
+- A form over `http.max_body_bytes` answers 413 instead of a CSRF or login error.
+- Pool usage counts polling jobs, which hold their slot like running ones, and no longer reports the count as cut short when it read every job.
+- A negative `after` on the events tab reads from the start.
+- Settings saves use the dashboard's clock, and HTTP timeouts and `http.max_body_bytes` are checked at start.
+
 ## [0.0.3-beta.3] - 2026-11-19
 
 ### Added

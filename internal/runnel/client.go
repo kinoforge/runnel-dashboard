@@ -271,23 +271,29 @@ func (c *Client) PoolUsage(ctx context.Context, ns string, scanLimit int) (map[s
 		return nil, false, nil
 	}
 	used := map[string]int{}
-	f := Filter{State: "running", Limit: 500}
-	for seen := 0; seen < scanLimit; {
-		f.Limit = min(500, scanLimit-seen)
-		page, err := c.Jobs(ctx, ns, f)
-		if err != nil {
-			return nil, false, err
-		}
-		for _, j := range page.Items {
-			if j.Pool != "" {
-				used[j.Pool]++
+	seen := 0
+	for _, state := range []string{"running", "polling"} {
+		f := Filter{State: state}
+		for {
+			if seen >= scanLimit {
+				return used, true, nil
 			}
+			f.Limit = min(500, scanLimit-seen)
+			page, err := c.Jobs(ctx, ns, f)
+			if err != nil {
+				return nil, false, err
+			}
+			for _, j := range page.Items {
+				if j.Pool != "" {
+					used[j.Pool]++
+				}
+			}
+			seen += len(page.Items)
+			if page.Next == "" || len(page.Items) == 0 {
+				break
+			}
+			f.Cursor = page.Next
 		}
-		seen += len(page.Items)
-		if page.Next == "" || len(page.Items) == 0 {
-			return used, false, nil
-		}
-		f.Cursor = page.Next
 	}
-	return used, true, nil
+	return used, false, nil
 }
