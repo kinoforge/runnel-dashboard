@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.0.3-beta.4] - 2026-11-21
+
 ### Added
 
 - `trusted_proxies`: with `client_ip_header`, the header is read only from these proxy addresses or ranges, and anything else is counted by its own address. A header value that is not an IP address is ignored.
@@ -53,7 +55,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - Each Runnel instance is one connection URL, such as `https://admin:${PASSWORD}@host:8700?ca=ca.pem`, with optional client certificates.
 - Images at `ghcr.io/kinoforge/runnel-dashboard`. Needs Runnel 0.0.3-beta.1 or newer.
 
-[Unreleased]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.3...HEAD
+[Unreleased]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.4...HEAD
+[0.0.3-beta.4]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.3...v0.0.3-beta.4
 [0.0.3-beta.3]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.2...v0.0.3-beta.3
 [0.0.3-beta.2]: https://github.com/kinoforge/runnel-dashboard/compare/v0.0.3-beta.1...v0.0.3-beta.2
 [0.0.3-beta.1]: https://github.com/kinoforge/runnel-dashboard/releases/tag/v0.0.3-beta.1
